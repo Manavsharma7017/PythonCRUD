@@ -7,9 +7,9 @@ from app.crud.task import crud_task
 from app.core.dependencies import get_current_active_user, require_admin
 from app.models.user import User
 from app.models.task import Task
-import logging
+from app.core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/tasks",
@@ -32,6 +32,7 @@ def create_task(
 ):
     """Create a new task"""
     task = crud_task.create(db, task_create, current_user.id)
+    logger.info(f"Task created: ID={task.id}, Title='{task.title}', Owner={current_user.email}")
     return task
 
 
@@ -73,6 +74,7 @@ def get_task(
     task = crud_task.get_by_id(db, task_id)
     
     if not task:
+        logger.warning(f"Task not found: ID={task_id}, User={current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found",
@@ -80,6 +82,7 @@ def get_task(
     
     # Check ownership or admin
     if task.owner_id != current_user.id and current_user.role != "admin":
+        logger.warning(f"Unauthorized task access attempt: Task ID={task_id}, User={current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions",
@@ -104,6 +107,7 @@ def update_task(
     task = crud_task.get_by_id(db, task_id)
     
     if not task:
+        logger.warning(f"Update attempted on non-existent task: ID={task_id}, User={current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found",
@@ -111,12 +115,14 @@ def update_task(
     
     # Check ownership or admin
     if task.owner_id != current_user.id and current_user.role != "admin":
+        logger.warning(f"Unauthorized task update attempt: Task ID={task_id}, User={current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions",
         )
     
     task = crud_task.update(db, task, task_update)
+    logger.info(f"Task updated: ID={task.id}, Title='{task.title}', User={current_user.email}")
     return task
 
 
@@ -135,6 +141,7 @@ def delete_task(
     task = crud_task.get_by_id(db, task_id)
     
     if not task:
+        logger.warning(f"Delete attempted on non-existent task: ID={task_id}, User={current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found",
@@ -142,10 +149,12 @@ def delete_task(
     
     # Check ownership or admin
     if task.owner_id != current_user.id and current_user.role != "admin":
+        logger.warning(f"Unauthorized task deletion attempt: Task ID={task_id}, User={current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions",
         )
     
+    logger.info(f"Task deleted: ID={task_id}, User={current_user.email}")
     crud_task.delete(db, task_id)
     return None

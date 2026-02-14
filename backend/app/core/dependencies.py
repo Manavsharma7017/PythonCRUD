@@ -7,9 +7,9 @@ from app.core.security import verify_token
 from app.models.user import User
 from app.crud.user import crud_user
 from typing import Optional
-import logging
+from app.core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -27,14 +27,17 @@ async def get_current_user(
     
     payload = verify_token(token)
     if payload is None:
+        logger.warning("Invalid token provided - token verification failed")
         raise credentials_exception
     
     user_id: Optional[int] = payload.get("sub")
     if user_id is None:
+        logger.warning("Invalid token payload - missing user ID")
         raise credentials_exception
     
     user = crud_user.get_by_id(db, user_id)
     if user is None:
+        logger.warning(f"User not found for token - User ID: {user_id}")
         raise credentials_exception
     
     return user
@@ -57,6 +60,7 @@ async def require_admin(
 ) -> User:
     """Require admin role"""
     if current_user.role != "admin":
+        logger.warning(f"Admin access denied for user: {current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

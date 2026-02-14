@@ -1,9 +1,6 @@
 """Configuration management using Pydantic Settings"""
 from pydantic_settings import BaseSettings
 from typing import List
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -36,9 +33,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO if not settings.DEBUG else logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)

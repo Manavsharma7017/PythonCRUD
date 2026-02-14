@@ -1,10 +1,11 @@
 """Database session management"""
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import settings
-import logging
+from app.core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create database engine
 engine = create_engine(
@@ -23,5 +24,13 @@ def get_db() -> Session:
     db = SessionLocal()
     try:
         yield db
+    except SQLAlchemyError as e:
+        logger.error(f"Database session error: {str(e)}", exc_info=True)
+        db.rollback()
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in database session: {str(e)}", exc_info=True)
+        db.rollback()
+        raise
     finally:
         db.close()

@@ -4,9 +4,9 @@ from typing import Optional
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from app.core.config import settings
-import logging
+from app.core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

@@ -8,9 +8,9 @@ from app.crud.user import crud_user
 from app.core.security import create_access_token, create_refresh_token
 from app.core.dependencies import get_current_active_user
 from app.models.user import User
-import logging
+from app.core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/auth",
@@ -34,6 +34,7 @@ def register(
     # Check if user already exists
     existing_user = crud_user.get_by_email(db, user_create.email)
     if existing_user:
+        logger.warning(f"Registration attempt with already registered email: {user_create.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
@@ -41,6 +42,7 @@ def register(
     
     # Create new user
     user = crud_user.create(db, user_create)
+    logger.info(f"New user registered successfully: {user.email} (ID: {user.id})")
     return user
 
 
@@ -59,6 +61,7 @@ def login(
     # Authenticate user
     user = crud_user.authenticate(db, user_login.email, user_login.password)
     if not user:
+        logger.warning(f"Failed login attempt for email: {user_login.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -66,6 +69,7 @@ def login(
         )
     
     if not user.is_active:
+        logger.warning(f"Login attempt for inactive user: {user.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User account is inactive",
@@ -80,6 +84,8 @@ def login(
     refresh_token = create_refresh_token(
         data={"sub": user.id, "email": user.email},
     )
+    
+    logger.info(f"User logged in successfully: {user.email} (ID: {user.id})")
     
     return TokenResponse(
         access_token=access_token,

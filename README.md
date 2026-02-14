@@ -13,6 +13,8 @@ This is a complete task management system featuring:
 - PostgreSQL database with SQLAlchemy
 - RESTful API with versioning (/api/v1)
 - Comprehensive error handling
+- Production-ready logging system with rotation
+- Request/response logging middleware
 - Pydantic validation
 - Swagger & ReDoc documentation
 - Docker containerization
@@ -36,15 +38,20 @@ This is a complete task management system featuring:
 │   ├── app/
 │   │   ├── main.py            # FastAPI application
 │   │   ├── core/              # Configuration, security, dependencies
+│   │   │   ├── logger.py      # Production logging configuration
+│   │   │   └── middleware.py  # Request/response logging
 │   │   ├── db/                # Database configuration
 │   │   ├── models/            # SQLAlchemy models
 │   │   ├── schemas/           # Pydantic schemas
 │   │   ├── crud/              # Database operations
 │   │   └── api/               # API endpoints (v1)
+│   ├── logs/                  # Application logs (auto-created)
+│   │   └── server.log         # Main log file
 │   ├── tests/                 # Unit tests
 │   ├── requirements.txt       # Python dependencies
 │   ├── .env                   # Environment variables
 │   ├── Dockerfile            # Docker build
+│   ├── LOGGING_GUIDE.md      # Logging documentation
 │   └── README.md             # Backend documentation
 │
 ├── frontend/                   # React Frontend
@@ -510,25 +517,171 @@ celery_app = Celery('tasks', broker='redis://localhost')
 }
 ```
 
-## 📝 Logging
+## 📝 Production-Ready Logging
 
-Structured logging for debugging and monitoring:
+The application includes comprehensive production-ready logging that tracks all operations, errors, and security events.
 
-```python
-import logging
-logger = logging.getLogger(__name__)
-logger.info(f"User created: {user.email}")
-logger.error(f"Database error: {error}")
+### Logging Features
+
+✅ **Dual Output**: Logs to both file (`backend/logs/server.log`) and console  
+✅ **Auto Log Rotation**: Files rotate at 10MB with 5 backup files  
+✅ **Structured Format**: Timestamp, level, module, function, line number, message  
+✅ **Request Tracking**: HTTP middleware logs all requests/responses  
+✅ **Error Tracking**: Full stack traces for exceptions  
+✅ **Security Monitoring**: Authentication and authorization events  
+
+### Log Locations
+
+```bash
+# Main log file
+backend/logs/server.log
+
+# Rotated logs (automatic)
+backend/logs/server.log.1
+backend/logs/server.log.2
+...
 ```
 
-Log levels:
-- **DEBUG**: Detailed information
-- **INFO**: General information
-- **WARNING**: Warning messages
-- **ERROR**: Error messages
-- **CRITICAL**: Critical errors
+The `logs/` directory is created automatically on first run.
 
-Configure in `app/core/config.py`
+### Log Format
+
+**File logs (detailed):**
+```
+2026-02-14 10:30:45 - INFO - app.api.v1.auth - login:60 - User logged in successfully: user@example.com (ID: 1)
+```
+
+**Console logs (simplified):**
+```
+2026-02-14 10:30:45 - INFO - app.api.v1.auth - User logged in successfully: user@example.com (ID: 1)
+```
+
+### What Gets Logged
+
+#### Application Events (INFO)
+- Application startup/shutdown
+- Database initialization
+- Middleware registration
+- User registration success
+- User login success
+- Task creation/update/deletion
+- HTTP requests (method, URL, status, duration)
+
+#### Security & Warnings (WARNING)
+- Failed login attempts
+- Unauthorized access attempts
+- Permission denied events
+- Task not found (404 errors)
+- Validation errors
+- Invalid tokens
+
+#### Errors & Exceptions (ERROR)
+- Database errors with stack traces
+- Token verification failures
+- Unhandled exceptions
+- Session errors
+- CRUD operation failures
+
+### Viewing Logs
+
+**Real-time monitoring (Linux/Mac):**
+```bash
+tail -f backend/logs/server.log
+```
+
+**Real-time monitoring (Windows PowerShell):**
+```powershell
+Get-Content backend\logs\server.log -Wait -Tail 50
+```
+
+**Search logs:**
+```bash
+# Linux/Mac
+grep "ERROR" backend/logs/server.log
+grep "user@example.com" backend/logs/server.log
+
+# Windows PowerShell
+Select-String -Path backend\logs\server.log -Pattern "ERROR"
+Select-String -Path backend\logs\server.log -Pattern "user@example.com"
+```
+
+### Log Levels
+
+| Level | Usage | Example Events |
+|-------|-------|----------------|
+| **INFO** | Normal operations | User login, task creation, HTTP requests |
+| **WARNING** | Expected issues | Failed login, unauthorized access, 404 errors |
+| **ERROR** | Exceptions | Database errors, token errors, unhandled exceptions |
+| **DEBUG** | Development only | Detailed diagnostic information |
+
+### Example Log Output
+
+```
+2026-02-14 10:30:45 - INFO - app.main - Application starting up: Task Management API
+2026-02-14 10:30:45 - INFO - app.main - Version: 1.0.0
+2026-02-14 10:31:00 - INFO - app.api.v1.auth - New user registered successfully: user@example.com (ID: 1)
+2026-02-14 10:31:15 - INFO - app.api.v1.auth - User logged in successfully: user@example.com (ID: 1)
+2026-02-14 10:31:30 - INFO - app.api.v1.tasks - Task created: ID=1, Title='Complete project', Owner=user@example.com
+2026-02-14 10:31:30 - INFO - app.core.middleware - POST /api/v1/tasks - Status: 201 - Client: 127.0.0.1 - Duration: 0.067s
+2026-02-14 10:32:00 - WARNING - app.api.v1.auth - Failed login attempt for email: user@example.com
+2026-02-14 10:32:15 - WARNING - app.api.v1.tasks - Unauthorized task access attempt: Task ID=5, User=user@example.com
+2026-02-14 10:33:00 - ERROR - app.crud.task - Database error creating task for user 1: IntegrityError(...)
+```
+
+### Configuration
+
+Logging is configured in `app/core/logger.py`. Customize settings:
+
+```python
+from app.core.logger import LoggerSetup
+
+# Change log level
+LoggerSetup.setup_logger(log_level="DEBUG")  # or "WARNING", "ERROR"
+
+# Change log file location
+LoggerSetup.setup_logger(log_file="logs/custom.log")
+
+# Adjust rotation settings
+LoggerSetup.setup_logger(
+    max_bytes=20971520,  # 20MB
+    backup_count=10       # Keep 10 backup files
+)
+```
+
+### Using Logger in Code
+
+```python
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
+
+# Info logging
+logger.info(f"User {user.email} performed action")
+
+# Warning logging
+logger.warning(f"Invalid access attempt for resource {id}")
+
+# Error logging with stack trace
+try:
+    risky_operation()
+except Exception as e:
+    logger.error(f"Operation failed: {str(e)}", exc_info=True)
+    raise
+```
+
+### Documentation
+
+For detailed logging documentation, see:
+- **[LOGGING_GUIDE.md](./backend/LOGGING_GUIDE.md)** - Complete usage guide
+- **[LOGGER_INTEGRATION_SUMMARY.md](./backend/LOGGER_INTEGRATION_SUMMARY.md)** - Technical details
+
+### Best Practices
+
+- ❌ **Don't log sensitive data**: passwords, tokens, personal information
+- ✅ **Include context**: user IDs, resource IDs, relevant details
+- ✅ **Use appropriate levels**: INFO for normal, WARNING for issues, ERROR for failures
+- ✅ **Be concise**: Clear but brief messages
+- ✅ **Use structured logging**: Consistent format for easy parsing
 
 ## 🔍 Monitoring & Debugging
 
@@ -594,6 +747,8 @@ netstat -ano | findstr :8000
 
 - [Backend README](./backend/README.md) - Detailed backend documentation
 - [Frontend README](./frontend/README.md) - Detailed frontend documentation
+- [Logging Guide](./backend/LOGGING_GUIDE.md) - Complete logging documentation
+- [Logger Integration](./backend/LOGGER_INTEGRATION_SUMMARY.md) - Technical logging details
 - [FastAPI Docs](https://fastapi.tiangolo.com/)
 - [React Docs](https://react.dev/)
 - [PostgreSQL Docs](https://www.postgresql.org/docs/)
@@ -637,13 +792,17 @@ For issues and questions:
 - [ ] API documentation accessible at /api/v1/docs
 - [ ] All tests passing
 - [ ] Docker images building successfully
+- [ ] Logs directory created (`backend/logs/`)
+- [ ] Logs appearing in console and file
+- [ ] Log rotation working (check server.log size)
 
 ## Next Steps
 
 1. **Customize**: Modify colors, branding, and features
 2. **Deploy**: Push to production using Docker
-3. **Monitor**: Setup logging and error tracking
+3. **Monitor**: Review logs in `backend/logs/server.log` for insights
 4. **Scale**: Add caching and background tasks
 5. **Extend**: Add more models and endpoints
+6. **Logging**: Configure log rotation and monitoring alerts
 
 Happy coding! 🚀
